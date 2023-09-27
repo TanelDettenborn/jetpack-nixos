@@ -1,6 +1,6 @@
 { lib, callPackage, runCommand, writeScript, writeShellApplication, makeInitrd, makeModulesClosure,
   flashFromDevice, edk2-jetson, uefi-firmware, flash-tools, buildTOS, buildOpteeTaDevKit, opteeClient,
-  python3, bspSrc, openssl, dtc,
+  pkcs11ta, python3, bspSrc, openssl, dtc,
   l4tVersion,
   pkgsAarch64,
 }:
@@ -27,6 +27,7 @@ let
   };
   tosImage = buildTOS tosArgs;
   taDevKit = buildOpteeTaDevKit tosArgs;
+  opteepkcs11ta = pkcs11ta tosArgs;
 
   teeSupplicant = opteeClient.overrideAttrs (old: {
     pname = "tee-supplicant";
@@ -216,5 +217,5 @@ let
 in {
   inherit (tosImage) nvLuksSrv hwKeyAgent;
   inherit mkFlashScript;
-  inherit flashScript initrdFlashScript tosImage taDevKit teeSupplicant signedFirmware bup fuseScript uefiCapsuleUpdate;
+  inherit flashScript initrdFlashScript tosImage taDevKit teeSupplicant opteepkcs11ta signedFirmware bup fuseScript uefiCapsuleUpdate;
 }

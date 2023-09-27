@@ -33,12 +33,29 @@ let
     meta.platforms = [ "aarch64-linux" ];
   };
 
+  pkcs11ta = args: (buildOptee (args // {
+    pname = "optee_pkcs11ta";
+    buildpkcs11ta = true;
+
+  })).overrideAttrs(_prev: {
+    dontInstall = false;
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p $out
+      cp ./out/ta/pkcs11/fd02c9da-306c-48c7-a49c-bbd827ae86ee.ta $out/fd02c9da-306c-48c7-a49c-bbd827ae86ee.ta
+
+      runHook postInstall
+    '';
+  });
+
   buildOptee = lib.makeOverridable ({ pname ? "optee-os"
                                     , socType
                                     , earlyTaPaths ? [ ]
                                     , extraMakeFlags ? [ ]
                                     , opteePatches ? [ ]
                                     , taPublicKeyFile ? null
+                                    , buildpkcs11ta ? false
                                     , ...
                                     }:
     let
@@ -46,6 +63,8 @@ let
         t194 = "";
         t234 = "${nvopteeSrc}/optee/optee_os/prebuilt/t234/libcommon_crypto.a";
       }.${socType};
+
+      buildOutPath = if buildpkcs11ta then "$(PWD)/out" else "$(out)";
 
       makeFlags = [
         "-C optee/optee_os"
@@ -55,7 +74,7 @@ let
         "CFG_WITH_STMM_SP=y"
         "CFG_STMM_PATH=${bspSrc}/bootloader/standalonemm_optee_${socType}.bin"
         "NV_CCC_PREBUILT=${nvCccPrebuilt}"
-        "O=$(out)"
+        "O=${buildOutPath}"
       ]
       ++ (lib.optional (taPublicKeyFile != null) "TA_PUBLIC_KEY=${taPublicKeyFile}")
       ++ extraMakeFlags;
@@ -216,5 +235,5 @@ let
     image;
 in
 {
-  inherit buildTOS buildOpteeTaDevKit opteeClient;
+  inherit buildTOS buildOpteeTaDevKit opteeClient pkcs11ta;
 }
