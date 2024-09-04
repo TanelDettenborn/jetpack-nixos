@@ -34,125 +34,67 @@
 }:
 
 let
-  # TODO: Move this generation out of uefi-firmware.nix, because this .nix
-  # file is callPackage'd using an aarch64 version of nixpkgs, and we don't
-  # want to have to recompilie imagemagick
-  bootLogoVariants = runCommand "uefi-bootlogo" { nativeBuildInputs = [ buildPackages.buildPackages.imagemagick ]; } ''
-    mkdir -p $out
-    convert ${bootLogo} -resize 1920x1080 -gravity Center -extent 1920x1080 -format bmp -define bmp:format=bmp3 $out/logo1080.bmp
-    convert ${bootLogo} -resize 1280x720  -gravity Center -extent 1280x720  -format bmp -define bmp:format=bmp3 $out/logo720.bmp
-    convert ${bootLogo} -resize 640x480   -gravity Center -extent 640x480   -format bmp -define bmp:format=bmp3 $out/logo480.bmp
-  '';
 
-  ###
+  l4tVersion = "36.3.0";
 
-  # See: https://github.com/NVIDIA/edk2-edkrepo-manifest/blob/main/edk2-nvidia/Jetson/NVIDIAJetsonManifest.xml
   edk2-src = fetchFromGitHub {
+    name = "edk2-src";
     owner = "NVIDIA";
     repo = "edk2";
-    rev = "r${l4tVersion}-edk2-stable202208";
+    rev = "r${l4tVersion}";
     fetchSubmodules = true;
-    sha256 = "sha256-A4nICu2g4Kprdmb0KVfuo8d5I5P7nAri5bzB4j9vUb4=";
+    sha256 = "sha256-FmQHcCbSXdeNS1/u5xlhazhP75nRyNuCK1D5AREQsIA=";
   };
 
   edk2-platforms = fetchFromGitHub {
+    name = "edk2-platforms";
     owner = "NVIDIA";
     repo = "edk2-platforms";
-    rev = "r${l4tVersion}-upstream-20220830";
-    sha256 = "sha256-PjAJEbbswOLYupMg/xEqkAOJuAC8SxNsQlb9YBswRfo=";
+    rev = "r${l4tVersion}";
+    fetchSubmodules = true;
+    sha256 = "sha256-Z89AkLvoG7pSOHUlU7IWLREM3R79kABpHj7KS5XpX0o=";
   };
 
   edk2-non-osi = fetchFromGitHub {
+    name = "edk2-non-osi";
     owner = "NVIDIA";
     repo = "edk2-non-osi";
-    rev = "r${l4tVersion}-upstream-20220830";
-    sha256 = "sha256-EPtI63jYhEIo4uVTH3lUt9NC/lK5vPVacUAc5qgmz9M=";
+    rev = "r${l4tVersion}";
+    sha256 = "sha256-FnznH8KsB3rD7sL5Lx2GuQZRPZ+uqAYqenjk+7x89mE=";
   };
 
-  edk2-nvidia = applyPatches {
-    src = fetchFromGitHub {
-      owner = "NVIDIA";
-      repo = "edk2-nvidia";
-      rev = "8444db349648a77ed8e2e3047a93004c9cadb2d3"; # Latest on r35.4.1-updates as of 2023-08-07
-      sha256 = "sha256-jHyyg5Ywg/tQg39oY1EwHPBjUTE7r7C9q0HO1vqCL6s=";
-    };
-    patches = edk2NvidiaPatches ++ [
-      (fetchpatch {
-        # https://github.com/NVIDIA/edk2-nvidia/pull/68
-        name = "fix-disabled-serial.patch";
-        url = "https://github.com/NVIDIA/edk2-nvidia/commit/9604259b0d11c049f6a3eb5365a3ae10cfb9e6d9.patch";
-        hash = "sha256-v/WEwcSNjBXeN0eXVzzl31dn6mq78wIm0u5lW1jGcdE=";
-      })
-      # Fix Eqos driver to use correct TX clock name
-      # PR: https://github.com/NVIDIA/edk2-nvidia/pull/76
-      (fetchpatch {
-        url = "https://github.com/NVIDIA/edk2-nvidia/commit/26f50dc3f0f041d20352d1656851c77f43c7238e.patch";
-        hash = "sha256-cc+eGLFHZ6JQQix1VWe/UOkGunAzPb8jM9SXa9ScIn8=";
-      })
-
-      ./capsule-authentication.patch
-
-      # Have UEFI use the device tree compiled into the firmware, instead of
-      # using one from the kernel-dtb partition.
-      # See: https://github.com/anduril/jetpack-nixos/pull/18
-      ./edk2-uefi-dtb.patch
-    ];
-    postPatch = lib.optionalString errorLevelInfo ''
-      sed -i 's#PcdDebugPrintErrorLevel|.*#PcdDebugPrintErrorLevel|0x8000004F#' Platform/NVIDIA/NVIDIA.common.dsc.inc
-    '' + lib.optionalString (bootLogo != null) ''
-      cp ${bootLogoVariants}/logo1080.bmp Silicon/NVIDIA/Assets/nvidiagray1080.bmp
-      cp ${bootLogoVariants}/logo720.bmp Silicon/NVIDIA/Assets/nvidiagray720.bmp
-      cp ${bootLogoVariants}/logo480.bmp Silicon/NVIDIA/Assets/nvidiagray480.bmp
-    '';
+  edk2-nvidia = fetchFromGitHub {
+    name = "edk2-nvidia";
+    owner = "NVIDIA";
+    repo = "edk2-nvidia";
+    rev = "r${l4tVersion}";
+    sha256 = "sha256-LaSko7jCgrM3nbDnzF4yCoSXFnFq4OeHTCeprf4VgjI=";
   };
 
   edk2-nvidia-non-osi = fetchFromGitHub {
+    name = "edk2-nvidia-non-osi";
     owner = "NVIDIA";
     repo = "edk2-nvidia-non-osi";
     rev = "r${l4tVersion}";
-    sha256 = "sha256-h0EW5j5/pq0c48alz7w2+g4RCU2yQdYOtDiNFH9VI3M=";
+    sha256 = "sha256-aoOTjoL33s57lBd6VfKXmlJnTg26+vD8JNToYBTaJ6w=";
   };
 
-  # Patches from upstream tianocore/edk2 for OpenSSL, to enable in-tree build
-  # of OpenSSL 1.1.1t
-  opensslPatches = import ./edk2-openssl-patches.nix {
-    inherit fetchpatch2;
+  edk2-open-gpu-kernel-modules = fetchFromGitHub {
+    name = "edk2-open-gpu-kernel-modules";
+    owner = "NVIDIA";
+    repo = "open-gpu-kernel-modules";
+    rev = "dac2350c7f6496ef0d7fb20fe6123a1270329bc8"; # 525.78.01
+    sha256 = "sha256-fxpyXVl735ZJ3NnK7jN95gPstu7YopYH/K7UK0iAC7k=";
   };
 
-  # This has been taken from:
-  # https://github.com/NixOS/nixpkgs/commit/3ed8d9b547c3941d74d9455fdec120f415ebaacd
-  vendoredOpenSSL = fetchFromGitHub {
-    owner = "openssl";
-    repo = "openssl";
-    rev = "OpenSSL_1_1_1t";
-    sha256 = "sha256-gI2+Vm67j1+xLvzBb+DF0YFTOHW7myotRsXRzluzSLY=";
-  };
+  pythonEnv = buildPackages.python3.withPackages (ps: [
+    ps.edk2-pytool-library
+    (ps.callPackage ./edk2-pytool-extensions.nix { })
+    ps.tkinter
+    ps.regex
+    ps.kconfiglib
+  ]);
 
-  edk2-jetson = edk2.overrideAttrs (prev: {
-    src = edk2-src;
-
-    depsBuildBuild = prev.depsBuildBuild ++ [ libuuid ];
-
-    patches =
-      # Remove this one patch (CryptoPkg/OpensslLib: Upgrade OpenSSL to 1.1.1t)
-      # present on nixos-23.05, as it will be added in the opensslPatches below
-      (builtins.filter (patch: patch.url != "https://bugzilla.tianocore.org/attachment.cgi?id=1330") prev.patches)
-      ++ opensslPatches;
-    postUnpack = ''
-      # This has been taken from:
-      # https://github.com/NixOS/nixpkgs/commit/3ed8d9b547c3941d74d9455fdec120f415ebaacd
-      rm -rf source/CryptoPkg/Library/OpensslLib/openssl
-    '';
-    postPatch = ''
-      # This has been taken from:
-      # https://github.com/NixOS/nixpkgs/commit/3ed8d9b547c3941d74d9455fdec120f415ebaacd
-
-      # Replace the edk2's in-tree openssl git-submodule with our 1.1.1t
-      cp -r ${vendoredOpenSSL} CryptoPkg/Library/OpensslLib/openssl
-    '';
-  });
-
-  pythonEnv = buildPackages.python3.withPackages (ps: [ ps.tkinter ]);
   targetArch =
     if stdenv.isi686 then
       "IA32"
@@ -169,92 +111,42 @@ let
     else
       "GCC5";
 
-  buildTarget = if debugMode then "DEBUG" else "RELEASE";
-
   jetson-edk2-uefi =
-    # TODO: edk2.mkDerivation doesn't have a way to override the edk version used!
-    # Make it not via passthru ?
+
     stdenv.mkDerivation {
       pname = "jetson-edk2-uefi";
       version = l4tVersion;
 
-      # Initialize the build dir with the build tools from edk2
-      src = edk2-src;
-
-      depsBuildBuild = [ buildPackages.stdenv.cc ];
-      nativeBuildInputs = [ bc pythonEnv acpica-tools dtc unixtools.whereis ];
-      strictDeps = true;
-
-      NIX_CFLAGS_COMPILE = [
-        "-Wno-error=format-security" # TODO: Fix underlying issue
-
-        # Workaround for ../Silicon/NVIDIA/Drivers/EqosDeviceDxe/nvethernetrm/osi/core/osi_hal.c:1428: undefined reference to `__aarch64_ldadd4_sync'
-        "-mno-outline-atomics"
-      ];
-
-      ${"GCC5_${targetArch}_PREFIX"} = stdenv.cc.targetPrefix;
-
-      # From edk2-nvidia/Silicon/NVIDIA/edk2nv/stuart/settings.py
-      PACKAGES_PATH = lib.concatStringsSep ":" [
-        "${edk2-src}/BaseTools" # TODO: Is this needed?
-        edk2-src
-        edk2-platforms
-        edk2-non-osi
-        edk2-nvidia
+      srcs = [
+        edk2-open-gpu-kernel-modules
         edk2-nvidia-non-osi
-        "${edk2-platforms}/Features/Intel/OutOfBandManagement"
+        edk2-nvidia
+        edk2-non-osi
+        edk2-platforms
+        edk2-src
+      ];
+      sourceRoot = edk2-src.name;
+
+      depsHostHost = [
+        libuuid
+      ];
+      depsBuildBuild = [
+        buildPackages.stdenv.cc
+        buildPackages.bash
+      ];
+      nativeBuildInputs = [
+        pythonEnv
+        buildPackages.libuuid
+        buildPackages.dtc
+        buildPackages.acpica-tools
+        buildPackages.gnat
+
       ];
 
-      enableParallelBuilding = true;
-
-      postUnpack = ''
-        # This has been taken from:
-        # https://github.com/NixOS/nixpkgs/commit/3ed8d9b547c3941d74d9455fdec120f415ebaacd
-        rm -rf source/CryptoPkg/Library/OpensslLib/openssl
-      '';
-
-      prePatch = ''
-        rm -rf BaseTools
-        cp -r ${edk2-jetson}/BaseTools BaseTools
-        chmod -R u+w BaseTools
-      '';
-
-      patches = opensslPatches ++ edk2UefiPatches ++ [
-        (fetchurl {
-          # Patch format does not play well with fetchpatch, it should be fine this is a static attachment in a ticket
-          name = "CVE-2023-45229_CVE-2023-45230_CVE-2023-45231_CVE-2023-45232_CVE-2023-45233_CVE-2023-45234_CVE-2023-45235.patch";
-          url = "https://bugzilla.tianocore.org/attachment.cgi?id=1457";
-          hash = "sha256-CF41lbjnXbq/6DxMW6q1qcLJ8WAs+U0Rjci+jRwJYYY=";
-        })
-        (fetchpatch {
-          name = "CVE-2022-36764.patch";
-          url = "https://bugzilla.tianocore.org/attachment.cgi?id=1436";
-          hash = "sha256-czku8DgElisDv6minI67nNt6BS+vH6txslZdqiGaQR4=";
-          excludes = [
-            "SecurityPkg/Test/SecurityPkgHostTest.dsc"
-          ];
-        })
-      ];
-
-      postPatch = ''
-        # This has been taken from:
-        # https://github.com/NixOS/nixpkgs/commit/3ed8d9b547c3941d74d9455fdec120f415ebaacd
-
-        # Replace the edk2's in-tree openssl git-submodule with our 1.1.1t
-        cp -r ${vendoredOpenSSL} CryptoPkg/Library/OpensslLib/openssl
-      '';
-
+      strictDeps = true;
+      NUGET_PATH = lib.getExe buildPackages.nuget;
       configurePhase = ''
         runHook preConfigure
-        export WORKSPACE="$PWD"
-        source ./edksetup.sh BaseTools
-
-        ${lib.optionalString (trustedPublicCertPemFile != null) ''
-        echo Using ${trustedPublicCertPemFile} as public certificate for capsule verification
-        ${lib.getExe buildPackages.openssl} x509 -outform DER -in ${trustedPublicCertPemFile} -out PublicCapsuleKey.cer
-        python3 BaseTools/Scripts/BinToPcd.py -p gEfiSecurityPkgTokenSpaceGuid.PcdPkcs7CertBuffer -i PublicCapsuleKey.cer -o PublicCapsuleKey.cer.gEfiSecurityPkgTokenSpaceGuid.PcdPkcs7CertBuffer.inc
-        python3 BaseTools/Scripts/BinToPcd.py -x -p gFmpDevicePkgTokenSpaceGuid.PcdFmpDevicePkcs7CertBufferXdr -i PublicCapsuleKey.cer -o PublicCapsuleKey.cer.gFmpDevicePkgTokenSpaceGuid.PcdFmpDevicePkcs7CertBufferXdr.inc
-        ''}
 
         runHook postConfigure
       '';
@@ -262,13 +154,31 @@ let
       buildPhase = ''
         runHook preBuild
 
-        # The BUILDID_STRING and BUILD_DATE_TIME are used
-        # just by nvidia, not generic edk2
-        build -a ${targetArch} -b ${buildTarget} -t ${buildType} -p Platform/NVIDIA/Jetson/Jetson.dsc -n $NIX_BUILD_CORES \
-          -D BUILDID_STRING=${l4tVersion} \
-          -D BUILD_DATE_TIME="$(date --utc --iso-8601=seconds --date=@$SOURCE_DATE_EPOCH)" \
-          ${lib.optionalString (trustedPublicCertPemFile != null) "-D CUSTOM_CAPSULE_CERT"} \
-          $buildFlags
+        cd ..
+        mkdir edk2-nvidia-server-gpu-sdk
+        ln -s open-gpu-kernel-modules edk2-nvidia-server-gpu-sdk/open-gpu-kernel-modules
+
+        export WORKSPACE="$PWD"
+        export PYTHONPATH="$PWD"/edk2-nvidia/Silicon/NVIDIA/scripts/..
+
+        #FIXME/NIXIFY: Collect build tools into same directory
+        rm -rf bin && mkdir bin && chmod +x bin
+        ln -s $(command -v aarch64-linux-gnu-gcc) bin/aarch64-linux-gnu-gcc
+        ln -s $(command -v aarch64-linux-gnu-gcc-ar) bin/aarch64-linux-gnu-gcc-ar
+        ln -s $(command -v aarch64-linux-gnu-ar) bin/aarch64-linux-gnu-ar
+        ln -s $(command -v aarch64-linux-gnu-cpp) bin/aarch64-linux-gnu-cpp
+        ln -s $(command -v aarch64-linux-gnu-objcopy) bin/aarch64-linux-gnu-objcopy
+        export CROSS_COMPILER_PREFIX="$PWD"/bin/aarch64-linux-gnu-
+
+        stuart_update -c "$PWD"/edk2-nvidia/Platform/NVIDIA/Jetson/PlatformBuild.py
+        python edk2/BaseTools/Edk2ToolsBuild.py -t GCC
+
+        # FIXME/NIXIFY: Use iasl-tool from pkgs
+        mkdir -p edk2-nvidia/Platform/NVIDIA/edk2-acpica-iasl_extdep/Linux-x86
+        rm -f edk2-nvidia/Platform/NVIDIA/edk2-acpica-iasl_extdep/Linux-x86/iasl
+        ln -s $(command -v iasl) edk2-nvidia/Platform/NVIDIA/edk2-acpica-iasl_extdep/Linux-x86/iasl
+
+        stuart_build -c "$PWD"/edk2-nvidia/Platform/NVIDIA/Jetson/PlatformBuild.py --verbose --target DEBUG
 
         runHook postBuild
       '';
@@ -303,5 +213,5 @@ let
   '';
 in
 {
-  inherit edk2-jetson uefi-firmware;
+  inherit edk2-src uefi-firmware;
 }
