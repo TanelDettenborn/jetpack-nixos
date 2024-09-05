@@ -140,16 +140,12 @@ let
         buildPackages.dtc
         buildPackages.acpica-tools
         buildPackages.gnat
-
+        buildPackages.bash
+        # useful for debugging
+        #buildPackages.strace
       ];
 
       strictDeps = true;
-      NUGET_PATH = lib.getExe buildPackages.nuget;
-      configurePhase = ''
-        runHook preConfigure
-
-        runHook postConfigure
-      '';
 
       buildPhase = ''
         runHook preBuild
@@ -161,15 +157,27 @@ let
         export WORKSPACE="$PWD"
         export PYTHONPATH="$PWD"/edk2-nvidia/Silicon/NVIDIA/scripts/..
 
-        #FIXME/NIXIFY: Collect build tools into same directory
         rm -rf bin && mkdir bin && chmod +x bin
-        ln -s $(command -v aarch64-linux-gnu-gcc) bin/aarch64-linux-gnu-gcc
-        ln -s $(command -v aarch64-linux-gnu-gcc-ar) bin/aarch64-linux-gnu-gcc-ar
-        ln -s $(command -v aarch64-linux-gnu-ar) bin/aarch64-linux-gnu-ar
-        ln -s $(command -v aarch64-linux-gnu-cpp) bin/aarch64-linux-gnu-cpp
-        ln -s $(command -v aarch64-linux-gnu-objcopy) bin/aarch64-linux-gnu-objcopy
-        export CROSS_COMPILER_PREFIX="$PWD"/bin/aarch64-linux-gnu-
 
+        # nvidia expects gcc-ar and ar to be in the same directory as gcc
+        for tool in gcc cc g++ c++ gcc-ar ar cpp objcopy; do
+          ln -s $(command -v ${stdenv.cc.targetPrefix}$tool) bin/${stdenv.cc.targetPrefix}$tool
+        done
+        export CROSS_COMPILER_PREFIX="$PWD"/bin/${stdenv.cc.targetPrefix}
+        ''${CROSS_COMPILER_PREFIX}gcc --version
+        export ${"GCC5_${targetArch}_PREFIX"}=$CROSS_COMPILER_PREFIX
+
+        chmod -R +w edk2-nvidia edk2-src
+        mv edk2-src edk2
+
+        # patchShebangs fails to see these when cross compiling
+        for i in edk2/BaseTools/BinWrappers/PosixLike/*; do
+          chmod +x "$i"
+          patchShebangs --build "$i"
+        done
+
+        # delete this so it doesn't trigger a nuget download
+        rm ./edk2/BaseTools/Bin/nasm_ext_dep.yaml ./edk2-nvidia/Platform/NVIDIA/iasl_ext_dep.yaml
         stuart_update -c "$PWD"/edk2-nvidia/Platform/NVIDIA/Jetson/PlatformBuild.py
         python edk2/BaseTools/Edk2ToolsBuild.py -t GCC
 
@@ -178,8 +186,16 @@ let
         rm -f edk2-nvidia/Platform/NVIDIA/edk2-acpica-iasl_extdep/Linux-x86/iasl
         ln -s $(command -v iasl) edk2-nvidia/Platform/NVIDIA/edk2-acpica-iasl_extdep/Linux-x86/iasl
 
-        stuart_build -c "$PWD"/edk2-nvidia/Platform/NVIDIA/Jetson/PlatformBuild.py --verbose --target DEBUG
+        ## useful for debugging
+        ## ps aux | grep sleep
+        ## sudo nsenter --target 481604 --mount --uts --net --pid --cgroup $(nix build --print-out-paths --inputs-from . nixpkgs#bash.out)/bin/bash
+        #stuart_build -c "$PWD"/edk2-nvidia/Platform/NVIDIA/Jetson/PlatformBuild.py || {
+        #  echo "Build failed"
+        #  sleep 9999999
+        #  exit 1
+        #}
 
+        stuart_build -c "$PWD"/edk2-nvidia/Platform/NVIDIA/Jetson/PlatformBuild.py
         runHook postBuild
       '';
 
