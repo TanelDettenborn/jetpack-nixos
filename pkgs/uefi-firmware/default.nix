@@ -211,11 +211,11 @@ let
       nativeBuildInputs = [ python3 nukeReferences ];
     } ''
     mkdir -p $out
-    python3 ${edk2-nvidia}/Silicon/NVIDIA/Tools/FormatUefiBinary.py \
+    python3 ${edk2-nvidia}/Silicon/NVIDIA/edk2nv/FormatUefiBinary.py \
       ${jetson-edk2-uefi}/FV/UEFI_NS.Fv \
       $out/uefi_jetson.bin
 
-    python3 ${edk2-nvidia}/Silicon/NVIDIA/Tools/FormatUefiBinary.py \
+    python3 ${edk2-nvidia}/Silicon/NVIDIA/edk2nv/FormatUefiBinary.py \
       ${jetson-edk2-uefi}/AARCH64/L4TLauncher.efi \
       $out/L4TLauncher.efi
 
