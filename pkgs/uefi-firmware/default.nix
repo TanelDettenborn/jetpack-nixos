@@ -241,6 +241,10 @@ let
 
         # Prepare for build
 
+        # -D BUILDID_STRING
+        # Format: {l4tVersion}-{edk2-nvidia repos HEAD sha}
+        export FIRMWARE_VERSION_BASE=${l4tVersion}
+
         export WORKSPACE="$PWD"
         export PYTHONPATH="$PWD"/edk2-nvidia/Silicon/NVIDIA/scripts/..
 
