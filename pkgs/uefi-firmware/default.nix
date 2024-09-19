@@ -39,10 +39,7 @@
 # Adjust following check when target/platform is tested!
 #
 
-# TODO itrustedPublicCertPemFile
-if trustedPublicCertPemFile != null then
-  throw "TODO: support for trustedPublicCertPemFile!"
-else if l4tVersion != "36.3.0" then
+if l4tVersion != "36.3.0" then
   throw "Only tested with l4tVersion 36.3.0"
 else
 
@@ -136,8 +133,7 @@ let
         hash = "sha256-cc+eGLFHZ6JQQix1VWe/UOkGunAzPb8jM9SXa9ScIn8=";
       })
 
-      #TODO: trustedPublicCertPemFile
-      # ./capsule-authentication.patch
+      (lib.optionalString (trustedPublicCertPemFile != null) ./capsule-authentication.patch)
 
       # Have UEFI use the device tree compiled into the firmware, instead of
       # using one from the kernel-dtb partition.
@@ -247,6 +243,13 @@ let
 
         export WORKSPACE="$PWD"
         export PYTHONPATH="$PWD"/edk2-nvidia/Silicon/NVIDIA/scripts/..
+
+        ${lib.optionalString (trustedPublicCertPemFile != null) ''
+        echo Using ${trustedPublicCertPemFile} as public certificate for capsule verification
+        ${lib.getExe buildPackages.openssl} x509 -outform DER -in ${trustedPublicCertPemFile} -out PublicCapsuleKey.cer
+        python3 ./edk2/BaseTools/Scripts/BinToPcd.py -p gEfiSecurityPkgTokenSpaceGuid.PcdPkcs7CertBuffer -i PublicCapsuleKey.cer -o PublicCapsuleKey.cer.gEfiSecurityPkgTokenSpaceGuid.PcdPkcs7CertBuffer.inc
+        python3 ./edk2/BaseTools/Scripts/BinToPcd.py -x -p gFmpDevicePkgTokenSpaceGuid.PcdFmpDevicePkcs7CertBufferXdr -i PublicCapsuleKey.cer -o PublicCapsuleKey.cer.gFmpDevicePkgTokenSpaceGuid.PcdFmpDevicePkcs7CertBufferXdr.inc
+        ''}
 
         stuart_update -c "$PWD"/edk2-nvidia/Platform/NVIDIA/Jetson/PlatformBuild.py
         python edk2/BaseTools/Edk2ToolsBuild.py -t ${buildType}
