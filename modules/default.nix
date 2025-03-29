@@ -83,6 +83,7 @@ in
         type = types.enum [
           "generic"
           "devkit"
+          "xavierNXdevkit"
         ];
         default = "generic";
         description = ''
